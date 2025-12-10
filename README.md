@@ -23,18 +23,16 @@ This service ingests security/privacy policies as PDF, stores them in a vector d
 
 ```mermaid
 flowchart TD
-
-    A[User (curl / Postman)] -->|Upload PDF| B[/ingest Endpoint/]
-    B --> C[Ingestion Pipeline]
-    C -->|PDF -> text| D[Chunking]
-    D -->|embedding| E[ChromaDB]
-    
-    A -->|Ask question| F[/query Endpoint/]
-    F --> G[Retrieve from Chroma]
-    G --> H[Build RAG Prompt]
-    H --> I[LLM (OpenRouter)]
-    I --> F
-````
+    User --> Ingest
+    Ingest --> ChunkText
+    ChunkText --> Embeddings
+    Embeddings --> VectorDB
+    User --> Query
+    Query --> Retrieve
+    Retrieve --> Prompt
+    Prompt --> LLM
+    LLM --> Query
+```
 
 ---
 
@@ -196,5 +194,6 @@ Response shape:
 * More ISO controls and other frameworks (SOC2, GDPR, PDPA)
 * Monitoring, evaluation, and logging
 * Better prompt engineering for partial coverage detection
+
 
 
