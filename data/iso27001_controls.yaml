@@ -1,0 +1,31 @@
+- id: A.5
+  title: Information Security Policies
+  description: Establish and maintain information security policies approved by management and regularly reviewed.
+  key_requirements:
+    - A formal security policy exists.
+    - Policy is approved by management.
+    - Policy is reviewed regularly.
+
+- id: A.6
+  title: Organization of Information Security
+  description: Define roles and responsibilities for information security, ensuring proper oversight and accountability.
+  key_requirements:
+    - Responsibilities are assigned.
+    - Oversight for security activities exists.
+    - Authority is documented.
+
+- id: A.7
+  title: Human Resource Security
+  description: Ensure employees and contractors understand security responsibilities before employment, during employment, and after termination.
+  key_requirements:
+    - Background checks considered.
+    - Security awareness training provided.
+    - Termination security procedures exist.
+
+- id: A.8
+  title: Asset Management
+  description: Identify organizational assets and define appropriate protection responsibilities.
+  key_requirements:
+    - Asset inventory exists.
+    - Owners are assigned.
+    - Acceptable use is defined.

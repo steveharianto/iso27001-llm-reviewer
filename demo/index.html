@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ISO27001 LLM Reviewer Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <!-- widen page and use space more efficiently -->
+  <div class="max-w-[1400px] mx-auto px-6 py-8">
+    <!-- Header -->
+    <header class="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">
+          ISO27001 LLM Reviewer <span class="text-sky-600 text-base font-normal">Prototype</span>
+        </h1>
+        <p class="text-sm text-slate-600 mt-1">
+          Upload your security policy PDF and get ISO27001-style analysis powered by RAG (FastAPI · ChromaDB · OpenRouter).
+        </p>
+      </div>
+      <div class="text-xs text-slate-500 text-right">
+        <div>API base:
+          <code class="bg-slate-100 px-2 py-1 rounded border border-slate-200">
+            http://127.0.0.1:8000
+          </code>
+        </div>
+      </div>
+    </header>
+
+    <!-- make right column wider than left -->
+    <main class="grid gap-6 lg:grid-cols-[2fr_3fr]">
+      <!-- Left: Upload + Uploaded policies -->
+      <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">1</span>
+          Upload policy document
+        </h2>
+        <p class="text-xs text-slate-600 mb-4">
+          Select your information security / compliance policy in PDF format. It will be indexed so you can ask ISO27001 questions about it.
+        </p>
+
+        <div class="space-y-3">
+          <label class="block text-xs font-medium text-slate-700">
+            Policy PDF
+            <span class="ml-1 text-[11px] text-slate-500">(PDF only)</span>
+          </label>
+          <input
+            type="file"
+            id="pdfFile"
+            accept="application/pdf"
+            class="block w-full text-sm text-slate-800
+                   file:mr-3 file:py-2 file:px-3
+                   file:rounded-md file:border-0
+                   file:text-xs file:font-medium
+                   file:bg-sky-600 file:text-white
+                   hover:file:bg-sky-500
+                   bg-white border border-slate-300 rounded-md px-3 py-2"
+          />
+
+          <button
+            id="ingestBtn"
+            onclick="ingest()"
+            class="inline-flex items-center justify-center px-4 py-2 rounded-md text-xs font-medium
+                   bg-sky-600 text-white hover:bg-sky-500
+                   disabled:opacity-60 disabled:cursor-not-allowed
+                   transition-colors mt-1"
+          >
+            Upload & index policy
+          </button>
+
+          <p class="text-[11px] text-slate-500 mt-1">
+            Each successful upload appears in the list below. You can then select any policy when asking compliance questions.
+          </p>
+
+          <!-- Uploaded policies list -->
+          <div class="mt-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium text-slate-700">Uploaded policies</span>
+              <span class="text-[11px] text-slate-500" id="policyCountLabel">0 policies indexed</span>
+            </div>
+            <div id="policiesList" class="space-y-2">
+              <p class="text-[11px] text-slate-500">
+                No policies uploaded yet. Upload a PDF to see it listed here.
+              </p>
+            </div>
+          </div>
+
+          <!-- Optional raw ingest response -->
+          <details class="mt-3">
+            <summary class="text-[11px] text-slate-500 cursor-pointer select-none">
+              Show last upload details (raw JSON)
+            </summary>
+            <div class="mt-2">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-medium text-slate-700">Last ingest response</span>
+                <button
+                  type="button"
+                  onclick="clearBox('ingestResult')"
+                  class="text-[10px] text-slate-500 hover:text-slate-800"
+                >
+                  Clear
+                </button>
+              </div>
+              <pre id="ingestResult" class="text-xs bg-slate-50 border border-slate-200 rounded-md p-3 h-32 overflow-auto text-slate-800 whitespace-pre-wrap break-words"></pre>         
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Right: Query + Client-like analysis view -->
+      <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <div>
+          <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">2</span>
+            Ask a compliance question
+          </h2>
+          <p class="text-xs text-slate-600 mb-4">
+            Choose a policy you uploaded and ask an ISO27001-style question, for example:
+            <span class="italic text-slate-800">“What does this policy say about ISO27001 A.7 (Human Resource Security)?”</span>
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label for="policySelect" class="block text-xs font-medium text-slate-700 mb-1">
+                Select policy
+              </label>
+              <select
+                id="policySelect"
+                class="w-full text-sm bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400"
+              >
+                <option value="" disabled selected>No policies available yet</option>
+              </select>
+              <p class="text-[11px] text-slate-500 mt-1">
+                This list is populated from the uploaded policies on the left.
+              </p>
+            </div>
+
+            <div>
+              <label for="question" class="block text-xs font-medium text-slate-700 mb-1">
+                Question
+              </label>
+              <textarea
+                id="question"
+                placeholder="What does this policy say about ISO27001 A.7?"
+                class="w-full text-sm bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 h-24 resize-none"
+              ></textarea>
+            </div>
+
+            <button
+              id="queryBtn"
+              onclick="query()"
+              class="inline-flex items-center justify-center px-4 py-2 rounded-md text-xs font-medium
+                     bg-emerald-600 text-white hover:bg-emerald-500
+                     disabled:opacity-60 disabled:cursor-not-allowed
+                     transition-colors"
+            >
+              Run ISO27001 analysis
+            </button>
+          </div>
+        </div>
+
+        <!-- Client-facing analysis view -->
+        <div class="mt-2 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-700 uppercase tracking-wide">AI policy analysis</span>
+            <button
+              type="button"
+              onclick="toggleRaw()"
+              class="text-[10px] text-slate-500 hover:text-slate-800"
+            >
+              Toggle raw JSON
+            </button>
+          </div>
+
+          <!-- Structured Answer -->
+          <div id="answerStructured" class="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs space-y-2">
+            <p class="text-slate-500 text-[11px]">
+              No analysis yet. Upload a policy and run an ISO27001 question to see the result.
+            </p>
+          </div>
+
+          <!-- Retrieved context snippets -->
+          <div class="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs space-y-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-medium text-slate-700">Retrieved policy snippets</span>
+            </div>
+            <div id="contextSnippets" class="space-y-1">
+              <p class="text-slate-500 text-[11px]">Relevant snippets from your policy will appear here.</p>
+            </div>
+          </div>
+
+          <!-- Raw JSON (for engineers) -->
+          <div id="rawContainer" class="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs hidden">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-medium text-slate-700">Raw JSON response</span>
+              <button
+                type="button"
+                onclick="clearBox('queryResultRaw')"
+                class="text-[10px] text-slate-500 hover:text-slate-800"
+              >
+                Clear
+              </button>
+            </div>
+            <pre id="queryResultRaw" class="text-xs text-slate-800 max-h-56 overflow-auto whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded-md"></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Status bar -->
+    <footer class="mt-6 text-[11px] text-slate-500 flex items-center justify-between">
+      <span id="statusText">Ready.</span>
+      <span>Client-facing demo · ISO27001 RAG · FastAPI · ChromaDB · OpenRouter</span>
+    </footer>
+  </div>
+
+  <script>
+    const BASE_URL = "http://127.0.0.1:8000";
+    const uploadedPolicies = [];
+
+    function setStatus(msg) {
+      document.getElementById("statusText").textContent = msg;
+    }
+
+    function clearBox(id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = "";
+    }
+
+    function toggleRaw() {
+      const raw = document.getElementById("rawContainer");
+      if (!raw) return;
+      raw.classList.toggle("hidden");
+    }
+
+    function upsertPolicy(policy) {
+      const index = uploadedPolicies.findIndex(p => p.file_id === policy.file_id);
+      if (index === -1) uploadedPolicies.push(policy);
+      else uploadedPolicies[index] = policy;
+    }
+
+    function renderUploadedPolicies() {
+      const list = document.getElementById("policiesList");
+      const countLabel = document.getElementById("policyCountLabel");
+
+      if (!uploadedPolicies.length) {
+        list.innerHTML = '<p class="text-[11px] text-slate-500">No policies uploaded yet. Upload a PDF to see it listed here.</p>';
+        countLabel.textContent = "0 policies indexed";
+        return;
+      }
+
+      countLabel.textContent = `${uploadedPolicies.length} polic${uploadedPolicies.length === 1 ? "y" : "ies"} indexed`;
+
+      let html = "";
+      uploadedPolicies.forEach((p) => {
+        html += `
+          <div class="flex items-start gap-3 border border-slate-200 rounded-md px-3 py-2 bg-white">
+            <div class="mt-0.5">
+              <div class="h-8 w-8 flex items-center justify-center rounded-md bg-sky-50 border border-sky-100 text-sky-700 text-xs font-semibold">
+                PDF
+              </div>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-slate-800">${p.filename}</p>
+                  <p class="text-[11px] text-slate-500">file_id: <span class="font-mono">${p.file_id}</span></p>
+                </div>
+                <div class="text-right">
+                  <p class="text-[11px] text-slate-500">Chunks: <span class="font-medium text-slate-800">${p.n_chunks}</span></p>
+                  <button
+                    type="button"
+                    onclick="selectPolicy('${p.file_id}')"
+                    class="mt-1 inline-flex items-center justify-center px-2 py-1 rounded border border-slate-300 text-[11px] text-slate-700 hover:bg-slate-100"
+                  >
+                    Use for questions
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      list.innerHTML = html;
+    }
+
+    function updatePolicySelect() {
+      const select = document.getElementById("policySelect");
+      const currentValue = select.value;
+
+      select.innerHTML = "";
+
+      if (!uploadedPolicies.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.disabled = true;
+        opt.selected = true;
+        opt.textContent = "No policies available yet";
+        select.appendChild(opt);
+        return;
+      }
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.disabled = true;
+      placeholder.selected = !currentValue;
+      placeholder.textContent = "Choose a policy…";
+      select.appendChild(placeholder);
+
+      uploadedPolicies.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.file_id;
+        opt.textContent = `${p.filename} (${p.file_id})`;
+        if (p.file_id === currentValue) {
+          placeholder.selected = false;
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+    }
+
+    function selectPolicy(fileId) {
+      const select = document.getElementById("policySelect");
+      select.value = fileId;
+    }
+
+    function renderAnswerStructured(data) {
+      const container = document.getElementById("answerStructured");
+      const snippetsContainer = document.getElementById("contextSnippets");
+      container.innerHTML = "";
+      snippetsContainer.innerHTML = "";
+
+      if (!data || !data.answer) {
+        container.innerHTML = '<p class="text-slate-500 text-[11px]">No analysis available.</p>';
+        snippetsContainer.innerHTML = '<p class="text-[11px] text-slate-500">No context snippets retrieved.</p>';
+        return;
+      }
+
+      const answer = data.answer;
+      const chunks = data.chunks_used || [];
+      let summary = "";
+      let fragmentsBlock = "";
+      let missing = "";
+
+      const parts = answer.split("Relevant text fragments:");
+      if (parts.length > 1) {
+        summary = parts[0].replace("Summary:", "").trim();
+        const second = parts[1];
+        const parts2 = second.split("Potential missing items:");
+        fragmentsBlock = (parts2[0] || "").trim();
+        missing = (parts2[1] || "").replace(/^[:\s]+/, "").trim();
+      } else {
+        summary = answer.trim();
+      }
+
+      const fragments = [];
+      if (fragmentsBlock) {
+        fragmentsBlock.split("\n").forEach((line) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("-")) fragments.push(trimmed.replace(/^-+\s*/, ""));
+        });
+      }
+
+      let html = "";
+
+      html += `
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold">✓</span>
+            <span class="text-xs font-semibold text-slate-800">Summary</span>
+          </div>
+          <p class="text-[11px] text-slate-800 leading-relaxed">${summary || "No summary detected."}</p>
+        </div>
+      `;
+
+      html += `
+        <div class="space-y-1 pt-2 border-t border-slate-200 mt-2">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-700 text-[10px] font-semibold">§</span>
+            <span class="text-xs font-semibold text-slate-800">Relevant text fragments</span>
+          </div>
+      `;
+
+      if (!fragments.length || (fragments.length === 1 && fragments[0].toLowerCase().startsWith("none"))) {
+        html += `<p class="text-[11px] text-slate-500">No specific fragments were identified for this question.</p>`;
+      } else {
+        html += `<ul class="list-disc ml-4 space-y-1">`;
+        fragments.forEach((f) => {
+          html += `<li class="text-[11px] text-slate-800 leading-relaxed">"${f}"</li>`;
+        });
+        html += `</ul>`;
+      }
+      html += `</div>`;
+
+      html += `
+        <div class="space-y-1 pt-2 border-t border-slate-200 mt-2">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">!</span>
+            <span class="text-xs font-semibold text-slate-800">Potential gaps vs ISO27001</span>
+          </div>
+      `;
+
+      if (!missing || missing.toLowerCase().startsWith("not enough information")) {
+        html += `<p class="text-[11px] text-slate-500">The system could not confidently identify specific gaps based on the current context.</p>`;
+      } else {
+        html += `<p class="text-[11px] text-slate-800 leading-relaxed">${missing}</p>`;
+      }
+      html += `</div>`;
+
+      container.innerHTML = html;
+
+      if (!chunks.length) {
+        snippetsContainer.innerHTML = '<p class="text-[11px] text-slate-500">No context snippets retrieved for this question.</p>';
+      } else {
+        let ctxHtml = "";
+        chunks.forEach((chunk, idx) => {
+          const pageLabel = chunk.page != null ? `Page ${chunk.page}` : `Snippet ${idx + 1}`;
+          ctxHtml += `
+            <div class="border border-slate-200 rounded-md px-2 py-1.5 bg-white">
+              <div class="text-[10px] text-slate-500 mb-0.5">${pageLabel}</div>
+              <div class="text-[11px] text-slate-800">${chunk.snippet}</div>
+            </div>
+          `;
+        });
+        snippetsContainer.innerHTML = ctxHtml;
+      }
+    }
+
+    async function ingest() {
+      const fileInput = document.getElementById("pdfFile");
+      const btn = document.getElementById("ingestBtn");
+      const out = document.getElementById("ingestResult");
+
+      if (!fileInput.files || !fileInput.files[0]) {
+        alert("Choose a PDF first.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+
+      btn.disabled = true;
+      setStatus("Uploading and indexing policy...");
+      out.textContent = "";
+
+      try {
+        const res = await fetch(`${BASE_URL}/ingest`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          out.textContent = JSON.stringify(data, null, 2);
+          setStatus("Ingest failed.");
+          return;
+        }
+
+        out.textContent = JSON.stringify(data, null, 2);
+
+        if (data.file_id && data.filename) {
+          upsertPolicy({
+            file_id: data.file_id,
+            filename: data.filename,
+            n_chunks: data.n_chunks ?? 0,
+          });
+          renderUploadedPolicies();
+          updatePolicySelect();
+        }
+
+        setStatus("Policy indexed successfully.");
+      } catch (err) {
+        out.textContent = String(err);
+        setStatus("Network / server error during ingest.");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function query() {
+      const select = document.getElementById("policySelect");
+      const fileId = select.value.trim();
+      const question = document.getElementById("question").value.trim();
+      const btn = document.getElementById("queryBtn");
+      const rawOut = document.getElementById("queryResultRaw");
+
+      if (!uploadedPolicies.length) {
+        alert("Upload at least one policy first.");
+        return;
+      }
+      if (!fileId) {
+        alert("Please choose a policy from the list.");
+        return;
+      }
+      if (!question) {
+        alert("Question is required.");
+        return;
+      }
+
+      btn.disabled = true;
+      setStatus("Running analysis...");
+      rawOut.textContent = "";
+
+      try {
+        const res = await fetch(`${BASE_URL}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_id: fileId, question }),
+        });
+
+        const data = await res.json();
+        rawOut.textContent = JSON.stringify(data, null, 2);
+
+        if (!res.ok) {
+          setStatus("Analysis failed.");
+          renderAnswerStructured(null);
+          return;
+        }
+
+        renderAnswerStructured(data);
+        setStatus("Analysis completed.");
+      } catch (err) {
+        rawOut.textContent = String(err);
+        renderAnswerStructured(null);
+        setStatus("Network / server error during query.");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
